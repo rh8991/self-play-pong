@@ -1,4 +1,6 @@
 from pygame import *
+import random
+import math
 
 class Paddle:
     def __init__(self, x, y, width, height, screen_height):
@@ -18,21 +20,21 @@ class Ball:
         self.x = screen_width // 2
         self.y = screen_height // 2
         self.radius = 7
-        self.speed_x = 7
-        self.speed_y = 7
+        self.base_speed = 7
+        self.angle = math.radians(random.randrange(0, 360, 10)) # Random initial angle
+        self.speed_x = 7 #self.base_speed * math.cos(self.angle)
+        self.speed_y = 7 #self.base_speed * math.sin(self.angle)
 
-    def move(self, screen_width, screen_height):
+    def move(self, screen_height): # Move the ball
         self.x += self.speed_x
         self.y += self.speed_y
 
-        side_x = self.x - self.radius  # Ball x edge
-        side_y = self.y - self.radius  # Ball y edge
-
         # Bounce off top and bottom
-        if side_y <= 0 or side_y >= screen_height:
+        if self.y-self.radius <= 0 or self.y + self.radius >= screen_height:
             self.speed_y = -self.speed_y
-            
-    def bounce_off_paddle(self, paddle): # Bounce off paddle
+        #todo: improve bounce angle based on hit position
+        
+    def bounce_paddle(self, paddle): # Bounce off paddle            
         ball_rect = Rect(self.x - self.radius, self.y - self.radius, self.radius * 2, self.radius * 2) # Create ball rect for collision
         if ball_rect.colliderect(paddle.rect):
             self.speed_x = -(self.speed_x+1 if self.speed_x > 0 else self.speed_x-1) #!fix: score in high speed
@@ -50,8 +52,13 @@ class Ball:
     def reset(self, screen_width, screen_height):
         self.x = screen_width // 2
         self.y = screen_height // 2
-        self.speed_x = 7 #if self.speed_x < 0 else -7
-        self.speed_y = 0
+        #angle = math.radians(pi/random.randrange(-90, 90, 12)) # Random initial angle
+        if self.speed_x < 0:
+            self.speed_x = 7#  * math.cos(angle)
+        else:
+            self.speed_x = -7# * math.cos(angle)
+            
+        self.speed_y = 7# * math.sin(angle)
         
         #todo: randomize direction after reset
 
@@ -81,14 +88,14 @@ class Game:
 
         display.set_caption("Pong Game - By BARO")
 
-    def score_update(self, ball):
-        side_x = ball.x - ball.radius  # Ball x edge
+    def score_update(self):#, ball):
+        side_x = self.ball.x - self.ball.radius  # Ball x edge
         if side_x <= 0:
-            game.score_L += 1
-            game.ball.reset(game.width, game.height)
+            self.score_L += 1
+            self.ball.reset(self.width, self.height)
         if side_x >= self.width:
-            game.score_R += 1
-            game.ball.reset(game.width, game.height)
+            self.score_R += 1
+            self.ball.reset(self.width, self.height)
 
         
 init() #Initialize Pygame
@@ -133,12 +140,10 @@ while game.running:
     game.screen.blit(score_R_text, (game.width * 1//4 - score_R_text.get_width()//2, 20))
 
     if not game.pause_game: # Update game only if not paused
-        scorer = game.score_update(game.ball)
-        game.ball.move(game.width, game.height)
-        game.score_update(game.ball)
-        
-        game.ball.bounce_off_paddle(game.paddle_L)
-        game.ball.bounce_off_paddle(game.paddle_R)
+        game.ball.move(game.height)
+        game.ball.bounce_paddle(game.paddle_L)
+        game.ball.bounce_paddle(game.paddle_R)
+        game.score_update()
         
     # Update Display
     display.flip()
