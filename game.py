@@ -6,9 +6,12 @@ class Paddle:
     def __init__(self, x, y, width, height, screen_height):
         self.rect = Rect(x, y, width, height)
         self.screen_height = screen_height
+        self.disabled = False
 
     def paddle_movement(self, key, up_key, down_key):
         # Paddle Movement
+        if self.disabled:
+            return
         if key[up_key] and self.rect.top > 0:
             self.rect.y -= 10
         if key[down_key] and self.rect.bottom < self.screen_height:
@@ -16,65 +19,82 @@ class Paddle:
             
 
 class Ball:
-    def __init__(self, x, y, screen_width, screen_height):
+    def random_angle(self):
+        return math.radians(random.randrange(0, 180, 11))
+    
+    def __init__(self, screen_width, screen_height):
+        #position
         self.x = screen_width // 2
         self.y = screen_height // 2
         self.radius = 7
+        
+        #speed
+        #self.speed_x = 7
+        #self.speed_y = 7
+        
         self.base_speed = 7
-        self.angle = math.radians(random.randrange(0, 360, 10)) # Random initial angle
-        self.speed_x = 7 #self.base_speed * math.cos(self.angle)
-        self.speed_y = 7 #self.base_speed * math.sin(self.angle)
-
-    def move(self, screen_height): # Move the ball
+        self.angle = self.random_angle() # Random initial angle
+        self.speed_x = self.base_speed * math.cos(self.angle)
+        self.speed_y = self.base_speed * math.sin(self.angle)
+        
+        self.temp_speed_x = self.speed_x
+        self.temp_speed_y = self.speed_y
+        
+    def move(self): # Move the ball
         self.x += self.speed_x
         self.y += self.speed_y
 
+    def bounce(self, paddle, screen_height, screen_width):            
         # Bounce off top and bottom
         if self.y-self.radius <= 0 or self.y + self.radius >= screen_height:
             self.speed_y = -self.speed_y
-        #todo: improve bounce angle based on hit position
+        #!fix: bouncing top and bottom    
         
-    def bounce_paddle(self, paddle): # Bounce off paddle            
+        # Bounce off paddle
+        #Todo: add bouncing from paddle sides
         ball_rect = Rect(self.x - self.radius, self.y - self.radius, self.radius * 2, self.radius * 2) # Create ball rect for collision
-        if ball_rect.colliderect(paddle.rect):
-            self.speed_x = -(self.speed_x+1 if self.speed_x > 0 else self.speed_x-1) #!fix: score in high speed
+        if ball_rect.colliderect(paddle.rect): # Check collision with paddle
+            if self.speed_x > 0:
+                self.speed_x = -(self.speed_x+1)
+            else:
+                self.speed_x = -(self.speed_x-1) #!fix: score in high speed
     
     def stop(self): # Stop the ball
+        self.temp_speed_x = self.speed_x
+        self.temp_speed_y = self.speed_y
+        
         self.speed_x = 0
         self.speed_y = 0
         
-    def resume(self, speed_x, speed_y):
-        self.speed_x = speed_x
-        self.speed_y = speed_y
-        #todo: implement resume functionality properly
-        
+    def resume(self):
+        self.speed_x = self.temp_speed_x
+        self.speed_y = self.temp_speed_y        
 
     def reset(self, screen_width, screen_height):
         self.x = screen_width // 2
         self.y = screen_height // 2
-        #angle = math.radians(pi/random.randrange(-90, 90, 12)) # Random initial angle
-        if self.speed_x < 0:
-            self.speed_x = 7#  * math.cos(angle)
-        else:
-            self.speed_x = -7# * math.cos(angle)
-            
-        self.speed_y = 7# * math.sin(angle)
         
-        #todo: randomize direction after reset
-
+        self.angle = self.random_angle() # Random initial angle
+        self.speed_x = -self.base_speed * math.cos(self.angle)
+        self.speed_y = self.base_speed * math.sin(self.angle)
+        
+    def diagnostics(self):
+        return f"Pos X: {self.x:.1f}  Y: {self.y:.1f} | Speed X: {self.speed_x:.1f}  Y: {self.speed_y:.1f}"
+        
 class Game:
     def __init__(self):
         
         #Game Settings
         self.width = 800
         self.height = 600
-        self.screen = display.set_mode((self.width, self.height))
+        self.screen = display.set_mode((self.width, self.height),RESIZABLE)
         self.running = True
         self.colors = {"background": (0, 0, 0), "paddle": (255, 255, 255), "ball": (255, 0, 0)}
+        self.show_diagnostics = False
 
 
         #Game Objects
-        self.ball = Ball(self.width//2, self.height//2, self.width, self.height)
+        self.ball = Ball(self.width, self.height)
         self.paddle_L = Paddle(self.width - 20, self.height//2 - 30, 10, 60, self.height) # Left Paddle
         self.paddle_R = Paddle(10, self.height//2 - 30, 10, 60, self.height) # Right Paddle
         self.pause_screen = Rect(self.width//2 - 100, self.height//2 - 50, 200, 100) # Pause Screen
@@ -84,9 +104,21 @@ class Game:
         self.pause_game = False
         
         # Font for score display
-        self.font = font.Font(None, 74)  
+        self.font = font.Font(None, 74)
+        self.debug_font = font.Font(None, 20)  # Smaller font for diagnostics
 
         display.set_caption("Pong Game - By BARO")
+        
+    def pause(self): # Pause the game
+        self.ball.stop()
+        self.paddle_L.disabled = True
+        self.paddle_R.disabled = True
+        
+    def resume(self): # Resume the game
+        self.ball.resume()
+        self.paddle_L.disabled = False
+        self.paddle_R.disabled = False
+        
 
     def score_update(self):#, ball):
         side_x = self.ball.x - self.ball.radius  # Ball x edge
@@ -114,8 +146,11 @@ while game.running:
             if evt.key == K_p: #!fix: toggle pause on 'P' key
                 game.pause_game = not game.pause_game
                 if game.pause_game:
-                    game.ball.stop()
-
+                    game.pause()
+                else:
+                    game.resume()
+            if evt.key == K_SPACE: # Show diagnostics on 'SPACE' key
+                game.show_diagnostics = not getattr(game, 'show_diagnostics', False)
 
     game.screen.fill(game.colors["background"]) # Clear Screen
 
@@ -139,10 +174,16 @@ while game.running:
     game.screen.blit(score_L_text, (game.width * 3//4 - score_L_text.get_width()//2, 20))
     game.screen.blit(score_R_text, (game.width * 1//4 - score_R_text.get_width()//2, 20))
 
+    # Draw diagnostic info in top-left corner (toggle with '?' key)
+    if game.show_diagnostics:
+        diagnostic_text = game.ball.diagnostics()
+        debug_surface = game.debug_font.render(diagnostic_text, True, (0, 255, 0))  # Green text
+        game.screen.blit(debug_surface, (10, 10))
+
     if not game.pause_game: # Update game only if not paused
-        game.ball.move(game.height)
-        game.ball.bounce_paddle(game.paddle_L)
-        game.ball.bounce_paddle(game.paddle_R)
+        game.ball.move()
+        game.ball.bounce(game.paddle_L, game.height, game.width)
+        game.ball.bounce(game.paddle_R, game.height, game.width)
         game.score_update()
         
     # Update Display
