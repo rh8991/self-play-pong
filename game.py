@@ -20,7 +20,10 @@ class Paddle:
 
 class Ball:
     def random_angle(self):
-        return math.radians(random.randrange(0, 180, 11))
+        angel = math.radians(random.randrange(-89, 89, 11))
+        print(f"Angle: {math.degrees(angel):.2f}°, Radians: {angel:.2f}")
+        
+        return angel
     
     def __init__(self, screen_width, screen_height):
         #position
@@ -29,9 +32,6 @@ class Ball:
         self.radius = 7
         
         #speed
-        #self.speed_x = 7
-        #self.speed_y = 7
-        
         self.base_speed = 7
         self.angle = self.random_angle() # Random initial angle
         self.speed_x = self.base_speed * math.cos(self.angle)
@@ -46,9 +46,13 @@ class Ball:
 
     def bounce(self, paddle, screen_height, screen_width):            
         # Bounce off top and bottom
-        if self.y-self.radius <= 0 or self.y + self.radius >= screen_height:
+        if self.y - self.radius < 0:
+            self.y = self.radius
             self.speed_y = -self.speed_y
-        #!fix: bouncing top and bottom    
+        
+        elif self.y + self.radius > screen_height:
+            self.y = screen_height - self.radius
+            self.speed_y = -self.speed_y
         
         # Bounce off paddle
         #Todo: add bouncing from paddle sides
@@ -62,7 +66,6 @@ class Ball:
     def stop(self): # Stop the ball
         self.temp_speed_x = self.speed_x
         self.temp_speed_y = self.speed_y
-        
         self.speed_x = 0
         self.speed_y = 0
         
@@ -75,11 +78,16 @@ class Ball:
         self.y = screen_height // 2
         
         self.angle = self.random_angle() # Random initial angle
-        self.speed_x = -self.base_speed * math.cos(self.angle)
+        self.speed_x = self.base_speed * math.cos(self.angle)
         self.speed_y = self.base_speed * math.sin(self.angle)
         
+        #!fix:angle and direction after reset
+        
     def diagnostics(self):
-        return f"Pos X: {self.x:.1f}  Y: {self.y:.1f} | Speed X: {self.speed_x:.1f}  Y: {self.speed_y:.1f}"
+        return (
+            f"Pos X: {self.x:.1f}  Y: {self.y:.1f}\n"
+            f"Speed X: {self.temp_speed_x:.1f}  Y: {self.temp_speed_y:.1f}"
+        )   
         
 class Game:
     def __init__(self):
@@ -104,20 +112,20 @@ class Game:
         self.pause_game = False
         
         # Font for score display
-        self.font = font.Font(None, 74)
-        self.debug_font = font.Font(None, 20)  # Smaller font for diagnostics
+        self.font = font.Font(None, 74) # Score font
+        self.debug_font = font.Font(None, 20)  #  Diagnostics font
 
         display.set_caption("Pong Game - By BARO")
         
-    def pause(self): # Pause the game
-        self.ball.stop()
-        self.paddle_L.disabled = True
-        self.paddle_R.disabled = True
-        
-    def resume(self): # Resume the game
-        self.ball.resume()
-        self.paddle_L.disabled = False
-        self.paddle_R.disabled = False
+    def set_paused(self, is_paused): # Pause the game
+        if is_paused:
+            self.ball.stop()
+            self.paddle_L.disabled = True
+            self.paddle_R.disabled = True
+        else:
+            self.ball.resume()
+            self.paddle_L.disabled = False
+            self.paddle_R.disabled = False
         
 
     def score_update(self):#, ball):
@@ -145,12 +153,14 @@ while game.running:
         if evt.type == KEYDOWN:
             if evt.key == K_p: #!fix: toggle pause on 'P' key
                 game.pause_game = not game.pause_game
-                if game.pause_game:
-                    game.pause()
-                else:
-                    game.resume()
+                game.set_paused(game.pause_game)
+                
             if evt.key == K_SPACE: # Show diagnostics on 'SPACE' key
                 game.show_diagnostics = not getattr(game, 'show_diagnostics', False)
+                
+            if evt.key == K_r: # Reset scores on 'R' key
+                game.score_L, game.score_R = 0, 0
+                game.ball.reset(game.width, game.height)
 
     game.screen.fill(game.colors["background"]) # Clear Screen
 
@@ -174,11 +184,15 @@ while game.running:
     game.screen.blit(score_L_text, (game.width * 3//4 - score_L_text.get_width()//2, 20))
     game.screen.blit(score_R_text, (game.width * 1//4 - score_R_text.get_width()//2, 20))
 
-    # Draw diagnostic info in top-left corner (toggle with '?' key)
+    # Draw diagnostic info in top-left corner (multi-line)
     if game.show_diagnostics:
-        diagnostic_text = game.ball.diagnostics()
-        debug_surface = game.debug_font.render(diagnostic_text, True, (0, 255, 0))  # Green text
-        game.screen.blit(debug_surface, (10, 10))
+        y = 10
+        for line in game.ball.diagnostics().splitlines():
+            debug_surface = game.debug_font.render(line, True, (0, 255, 0))  # Green text
+            game.screen.blit(debug_surface, (10, y))
+            y += debug_surface.get_height() + 2
+        draw.line(game.screen, (0, 255, 0), (game.width // 2, 0), (game.width // 2, game.height), 1)
+        draw.line(game.screen, (0, 255, 0), (0, game.height // 2), (game.width, game.height // 2), 1)
 
     if not game.pause_game: # Update game only if not paused
         game.ball.move()
